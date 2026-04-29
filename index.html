@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTS 语料挑选 — 王也音色</title>
+<style>
+/* === Reset & Base === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; font-size: 14px; color: #1a1a1a; background: #f5f5f5; line-height: 1.5; }
+button { cursor: pointer; font-family: inherit; font-size: inherit; }
+input, select { font-family: inherit; font-size: inherit; }
+
+/* === Layout === */
+.app { display: flex; height: 100vh; }
+.sidebar { width: 380px; min-width: 380px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* === Sidebar Header === */
+.sidebar-header { padding: 16px; border-bottom: 1px solid #e0e0e0; }
+.sidebar-header h1 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.search-row { display: flex; gap: 8px; }
+.search-row input { flex: 1; padding: 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px; outline: none; font-size: 13px; }
+.search-row input:focus { border-color: #4a90d9; }
+.search-row select { padding: 8px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; }
+.status-bar { padding: 8px 16px; font-size: 12px; color: #666; border-bottom: 1px solid #e0e0e0; background: #fafafa; }
+.batch-row { padding: 8px 16px; border-bottom: 1px solid #e0e0e0; display: flex; gap: 6px; align-items: center; background: #fafafa; }
+.batch-row label { font-size: 12px; color: #666; white-space: nowrap; }
+.batch-row select { font-size: 12px; padding: 4px 6px; border: 1px solid #d0d0d0; border-radius: 4px; }
+
+/* === Corpus List === */
+.corpus-list { flex: 1; overflow-y: auto; }
+.corpus-item { padding: 10px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.1s; display: flex; gap: 10px; align-items: flex-start; }
+.corpus-item:hover { background: #f0f7ff; }
+.corpus-item.active { background: #e0efff; border-left: 3px solid #4a90d9; padding-left: 13px; }
+.corpus-item .id { font-size: 11px; color: #999; min-width: 30px; padding-top: 2px; }
+.corpus-item .text { flex: 1; font-size: 13px; }
+.corpus-item .badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; white-space: nowrap; margin-top: 2px; }
+.badge-done { background: #e6f4ea; color: #1a7f37; }
+.badge-pending { background: #fff3e0; color: #e65100; }
+.badge-deleted { background: #f0f0f0; color: #999; text-decoration: line-through; }
+.corpus-item .checkbox { margin-top: 3px; }
+
+/* === Main Content === */
+.main-header { padding: 16px 24px; border-bottom: 1px solid #e0e0e0; background: #fff; }
+.main-header h2 { font-size: 15px; font-weight: 600; }
+.main-content { flex: 1; overflow-y: auto; padding: 24px; }
+.empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 15px; }
+
+/* === Detail Card === */
+.detail-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+.detail-text { padding: 20px 24px; font-size: 16px; line-height: 1.8; border-bottom: 1px solid #e0e0e0; }
+.audio-section { padding: 20px 24px; }
+.audio-section h3 { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.audio-row { display: flex; gap: 24px; }
+.audio-block { flex: 1; }
+.audio-block label { display: block; font-size: 12px; color: #999; margin-bottom: 6px; }
+.audio-block audio { width: 100%; }
+.ref-text { font-size: 12px; color: #666; margin-top: 6px; font-style: italic; }
+
+/* === Ref Selector === */
+.ref-section { padding: 20px 24px; border-top: 1px solid #e0e0e0; }
+.ref-section h3 { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.ref-filter { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.style-tab { padding: 4px 12px; border: 1px solid #d0d0d0; border-radius: 4px; background: #fff; font-size: 12px; color: #666; }
+.style-tab.active { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+.ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; max-height: 240px; overflow-y: auto; }
+.ref-item { padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.1s; display: flex; gap: 8px; }
+.ref-item:hover { border-color: #4a90d9; background: #f0f7ff; }
+.ref-item.selected { border-color: #4a90d9; background: #e0efff; }
+.ref-item .ref-id { color: #999; min-width: 50px; }
+.ref-item .ref-text { flex: 1; color: #333; }
+
+/* === Action Buttons === */
+.action-bar { padding: 16px 24px; border-top: 1px solid #e0e0e0; background: #fafafa; display: flex; gap: 8px; }
+.btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; border: 1px solid transparent; }
+.btn-primary { background: #4a90d9; color: #fff; }
+.btn-primary:hover { background: #357abd; }
+.btn-primary:disabled { background: #b0c4de; cursor: not-allowed; }
+.btn-danger { background: #fff; color: #d93025; border-color: #d93025; }
+.btn-danger:hover { background: #fce8e6; }
+.btn-secondary { background: #fff; color: #333; border-color: #d0d0d0; }
+.btn-secondary:hover { background: #f5f5f5; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.loading { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 6px; color: #fff; font-size: 13px; z-index: 1000; animation: slideIn 0.2s ease; }
+.toast-success { background: #1a7f37; }
+.toast-error { background: #d93025; }
+.toast-info { background: #4a90d9; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.current-ref-badge { display: inline-block; padding: 2px 8px; background: #e0efff; color: #4a90d9; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>TTS 语料挑选 — 王也音色</h1>
+      <div class="search-row">
+        <input type="text" id="searchInput" placeholder="搜索编号或文本..." />
+        <select id="statusFilter">
+          <option value="all">全部</option>
+          <option value="generated">已生成</option>
+          <option value="pending">未生成</option>
+        </select>
+      </div>
+    </div>
+    <div class="status-bar" id="statusBar">加载中...</div>
+    <div class="batch-row">
+      <label>批量操作:</label>
+      <input type="checkbox" id="selectAll" title="全选" />
+      <button class="btn btn-sm btn-secondary" onclick="batchRegenerate()" id="batchBtn" disabled>重新生成</button>
+      <button class="btn btn-sm btn-danger" onclick="batchDelete()" id="batchDelBtn" disabled>删除</button>
+    </div>
+    <div class="corpus-list" id="corpusList"></div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="main-header">
+      <h2 id="mainTitle">选择一条语料查看详情</h2>
+    </div>
+    <div class="main-content" id="mainContent">
+      <div class="empty-state">从左侧列表选择一条语料</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== State ==========
+let corpusData = [];
+let refsData = [];
+let stylesData = {};
+let selectedId = null;
+let selectedRefForRegen = null;
+let selectedRefs = {};  // { style: refName }
+let activeStyle = 'all';
+let checkedIds = new Set();
+
+// ========== API ==========
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+// ========== Load Data ==========
+async function loadData() {
+  const [corpusRes, refsRes] = await Promise.all([
+    api('/api/corpus'),
+    api('/api/refs')
+  ]);
+  corpusData = corpusRes.corpus;
+  refsData = refsRes.refs;
+  stylesData = refsRes.styles;
+  updateStatusBar();
+  renderList();
+}
+
+function updateStatusBar() {
+  const gen = corpusData.filter(c => c.generated).length;
+  document.getElementById('statusBar').textContent = `已生成 ${gen} / ${corpusData.length} 条`;
+}
+
+// ========== Render List ==========
+function renderList() {
+  const search = document.getElementById('searchInput').value.trim();
+  const statusFilter = document.getElementById('statusFilter').value;
+  const list = document.getElementById('corpusList');
+  let html = '';
+
+  for (const item of corpusData) {
+    // Filter
+    if (statusFilter === 'generated' && !item.generated) continue;
+    if (statusFilter === 'pending' && item.generated) continue;
+    if (search) {
+      const s = search.toLowerCase();
+      if (!item.id.toString().includes(s) && !item.text.toLowerCase().includes(s)) continue;
+    }
+
+    const badgeClass = item.generated ? 'badge-done' : 'badge-pending';
+    const badgeText = item.generated ? '已生成' : '未生成';
+    const isActive = item.id === selectedId ? ' active' : '';
+    const checked = checkedIds.has(item.id) ? ' checked' : '';
+    const refBadge = item.ref_name ? (() => {
+      const ref = refsData.find(r => r.name === item.ref_name);
+      const styleLabel = ref ? ref.style_label : '';
+      return `<span style="font-size:10px;color:#aaa;white-space:nowrap;">[${item.ref_name}${styleLabel ? '/' + styleLabel : ''}]</span>`;
+    })() : '';
+
+    html += `<div class="corpus-item${isActive}" data-id="${item.id}" onclick="selectItem(${item.id})">
+      <input class="checkbox" type="checkbox" ${checked} onclick="event.stopPropagation();toggleCheck(${item.id})" />
+      <span class="id">${String(item.id).padStart(4, '0')}</span>
+      <span class="text">${escHtml(item.text)}</span>
+      ${refBadge}
+      <span class="badge ${badgeClass}">${badgeText}</span>
+    </div>`;
+  }
+
+  list.innerHTML = html || '<div class="empty-state">没有匹配结果</div>';
+  updateBatchButtons();
+}
+
+// ========== Selection ==========
+function selectItem(id) {
+  selectedId = id;
+  renderList();
+  renderDetail(id);
+}
+
+function toggleCheck(id) {
+  if (checkedIds.has(id)) checkedIds.delete(id);
+  else checkedIds.add(id);
+  updateBatchButtons();
+}
+
+function updateBatchButtons() {
+  const has = checkedIds.size > 0;
+  document.getElementById('batchBtn').disabled = !has;
+  document.getElementById('batchDelBtn').disabled = !has;
+}
+
+// ========== Detail ==========
+async function renderDetail(id) {
+  const item = corpusData.find(c => c.id === id);
+  if (!item) return;
+
+  const title = document.getElementById('mainTitle');
+  const content = document.getElementById('mainContent');
+
+  title.innerHTML = `第 ${String(id).padStart(4, '0')} 条 <span class="current-ref-badge" id="currentRefBadge"></span>`;
+
+  // If this item has a recorded reference, use it
+  const origRefName = item.ref_name || null;
+  const origRef = refsData.find(r => r.name === origRefName);
+
+  content.innerHTML = `<div class="detail-card">
+    <div class="detail-text">${escHtml(item.text)}</div>
+
+    <div class="audio-section">
+      <h3>音频对比</h3>
+      <div class="audio-row">
+        <div class="audio-block">
+          <label>参照语音（参考音频）</label>
+          ${origRef
+            ? `<audio id="refAudio" controls preload="none"><source src="/${origRef.path}" type="audio/wav"></audio>
+               <div class="ref-text" id="refText">${origRef.name}.WAV「${escHtml(origRef.text)}」</div>`
+            : `<audio id="refAudio" controls preload="none"></audio>
+               <div class="ref-text" id="refText">点击下方选择参考音频</div>`
+          }
+        </div>
+        <div class="audio-block">
+          <label>生成语音（TTS 输出）</label>
+          ${item.generated
+            ? `<audio id="genAudio" controls preload="none"><source src="/wav/${String(id).padStart(4,'0')}.wav" type="audio/wav"></audio>`
+            : `<div style="color:#999;padding:12px 0;">尚未生成</div>`
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="ref-section">
+      <h3>选择参考音频</h3>
+      <div class="ref-filter" id="refFilter"></div>
+      <div class="ref-grid" id="refGrid"></div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary" onclick="regenerate()" id="regenBtn" ${!item.generated && !selectedRefForRegen ? '' : ''}>
+        重新生成
+      </button>
+      <button class="btn btn-secondary" onclick="playRef()">播放参照</button>
+      <button class="btn btn-secondary" onclick="playGen()" ${!item.generated ? 'disabled' : ''}>播放生成</button>
+      <button class="btn btn-danger" onclick="deleteWav(${id})" ${!item.generated ? 'disabled' : ''}>删除生成</button>
+    </div>
+  </div>`;
+
+  renderRefFilter();
+  renderRefGrid();
+
+  // Preserve user's selected ref if they already chose one, otherwise use original ref
+  const preservedRef = selectedRefForRegen;
+  if (preservedRef && refsData.find(r => r.name === preservedRef)) {
+    // User had already selected a ref — keep it
+    selectRef(preservedRef);
+  } else if (origRef) {
+    selectRef(origRef.name);
+  } else if (refsData.length > 0) {
+    selectRef(refsData[0].name);
+  }
+}
+
+function renderRefFilter() {
+  const container = document.getElementById('refFilter');
+  let html = `<button class="style-tab ${activeStyle === 'all' ? 'active' : ''}" onclick="setStyle('all')">全部</button>`;
+  for (const [key, label] of Object.entries(stylesData)) {
+    html += `<button class="style-tab ${activeStyle === key ? 'active' : ''}" onclick="setStyle('${key}')">${label}</button>`;
+  }
+  container.innerHTML = html;
+}
+
+function renderRefGrid() {
+  const container = document.getElementById('refGrid');
+  const filtered = activeStyle === 'all' ? refsData : refsData.filter(r => r.style === activeStyle);
+
+  let html = '';
+  for (const ref of filtered) {
+    const sel = selectedRefForRegen === ref.name ? ' selected' : '';
+    html += `<div class="ref-item${sel}" onclick="selectRef('${ref.name}')">
+      <span class="ref-id">${ref.name}.WAV</span>
+      <span class="ref-text">${escHtml(ref.text)}</span>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+function setStyle(style) {
+  activeStyle = style;
+  renderRefFilter();
+  renderRefGrid();
+}
+
+function selectRef(name) {
+  selectedRefForRegen = name;
+  const ref = refsData.find(r => r.name === name);
+  if (ref) {
+    document.getElementById('refAudio').src = '/' + ref.path;
+    document.getElementById('refText').textContent = `「${ref.text}」`;
+    const badge = document.getElementById('currentRefBadge');
+    if (badge) badge.textContent = `当前参考: ${name}.WAV [${ref.style_label}]`;
+  }
+  renderRefGrid();
+}
+
+// ========== Audio Control ==========
+function playRef() {
+  const a = document.getElementById('refAudio');
+  if (a && a.src) a.play();
+}
+
+function playGen() {
+  const a = document.getElementById('genAudio');
+  if (a) a.play();
+}
+
+// ========== Actions ==========
+async function regenerate() {
+  if (!selectedId) return;
+
+  const refName = selectedRefForRegen;
+  if (!refName) {
+    toast('请先选择一个参考音频', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('regenBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span>生成中...';
+
+  try {
+    const res = await api('/api/regenerate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: selectedId, ref: refName })
+    });
+
+    if (res.error) {
+      toast(`生成失败: ${res.error}`, 'error');
+    } else {
+      toast(`第 ${String(selectedId).padStart(4,'0')} 条生成成功`, 'success');
+      // Update state
+      const item = corpusData.find(c => c.id === selectedId);
+      if (item) {
+        item.generated = true;
+        item.ref_name = res.ref;
+        item.ref_text = res.ref_text || item.ref_text;
+      }
+      updateStatusBar();
+      renderList();
+      renderDetail(selectedId);
+      // Auto play the new audio
+      setTimeout(() => {
+        const a = document.getElementById('genAudio');
+        if (a) a.play();
+      }, 300);
+    }
+  } catch (e) {
+    toast(`请求失败: ${e.message}`, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '重新生成';
+}
+
+async function deleteWav(id) {
+  if (!confirm(`确定删除第 ${String(id).padStart(4, '0')} 条的生成音频？`)) return;
+
+  try {
+    const res = await api(`/api/wav/${id}`, { method: 'DELETE' });
+    if (res.error) {
+      toast(`删除失败: ${res.error}`, 'error');
+    } else {
+      toast(`已删除`, 'info');
+      const item = corpusData.find(c => c.id === id);
+      if (item) item.generated = false;
+      updateStatusBar();
+      renderList();
+      renderDetail(id);
+    }
+  } catch (e) {
+    toast(`请求失败: ${e.message}`, 'error');
+  }
+}
+
+async function batchRegenerate() {
+  const ids = Array.from(checkedIds);
+  if (ids.length === 0) return;
+
+  const refName = selectedRefForRegen;
+  if (!refName) {
+    toast('请先选择一个参考音频', 'error');
+    return;
+  }
+
+  if (!confirm(`确定用参考音频 ${refName}.WAV 重新生成 ${ids.length} 条语料？`)) return;
+
+  toast(`开始批量生成 ${ids.length} 条...`, 'info');
+
+  try {
+    const res = await api('/api/batch-regenerate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, ref: refName })
+    });
+
+    if (res.error) {
+      toast(`批量生成失败: ${res.error}`, 'error');
+    } else {
+      const ok = res.success.length;
+      const fail = res.failed.length;
+      toast(`批量生成完成: 成功 ${ok} 条，失败 ${fail} 条`, ok > 0 ? 'success' : 'error');
+
+      // Update state
+      const ref = refsData.find(r => r.name === refName);
+      const refText = ref ? ref.text : '';
+      for (const id of res.success) {
+        const item = corpusData.find(c => c.id === id);
+        if (item) {
+          item.generated = true;
+          item.ref_name = refName;
+          item.ref_text = refText;
+        }
+      }
+      updateStatusBar();
+      renderList();
+      if (selectedId && res.success.includes(selectedId)) {
+        renderDetail(selectedId);
+      }
+    }
+  } catch (e) {
+    toast(`请求失败: ${e.message}`, 'error');
+  }
+}
+
+async function batchDelete() {
+  const ids = Array.from(checkedIds);
+  if (ids.length === 0) return;
+  if (!confirm(`确定删除 ${ids.length} 条生成音频？`)) return;
+
+  let success = 0, failed = 0;
+  for (const id of ids) {
+    try {
+      const res = await api(`/api/wav/${id}`, { method: 'DELETE' });
+      if (res.success) {
+        success++;
+        const item = corpusData.find(c => c.id === id);
+        if (item) item.generated = false;
+      } else {
+        failed++;
+      }
+    } catch {
+      failed++;
+    }
+  }
+
+  toast(`批量删除完成: 成功 ${success} 条，失败 ${failed} 条`, 'info');
+  updateStatusBar();
+  renderList();
+  if (selectedId) renderDetail(selectedId);
+  checkedIds.clear();
+  document.getElementById('selectAll').checked = false;
+}
+
+// ========== Select All ==========
+document.getElementById('selectAll').addEventListener('change', function() {
+  if (this.checked) {
+    const search = document.getElementById('searchInput').value.trim();
+    const statusFilter = document.getElementById('statusFilter').value;
+    for (const item of corpusData) {
+      if (statusFilter === 'generated' && !item.generated) continue;
+      if (statusFilter === 'pending' && item.generated) continue;
+      if (search) {
+        const s = search.toLowerCase();
+        if (!item.id.toString().includes(s) && !item.text.toLowerCase().includes(s)) continue;
+      }
+      checkedIds.add(item.id);
+    }
+  } else {
+    checkedIds.clear();
+  }
+  renderList();
+});
+
+// ========== Search ==========
+document.getElementById('searchInput').addEventListener('input', renderList);
+document.getElementById('statusFilter').addEventListener('change', renderList);
+
+// ========== Toast ==========
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ========== Utils ==========
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ========== Init ==========
+loadData();
+</script>
+</body>
+</html>
