@@ -90,6 +90,7 @@ input, select { font-family: inherit; font-size: inherit; }
 .toast-info { background: #4a90d9; }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .current-ref-badge { display: inline-block; padding: 2px 8px; background: #e0efff; color: #4a90d9; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+.style-badge { display: inline-block; padding: 2px 8px; background: #f0f0f0; color: #555; border-radius: 4px; font-size: 12px; margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -230,7 +231,7 @@ async function renderDetail(id) {
   const title = document.getElementById('mainTitle');
   const content = document.getElementById('mainContent');
 
-  title.innerHTML = `第 ${String(id).padStart(4, '0')} 条 <span class="current-ref-badge" id="currentRefBadge"></span>`;
+  title.innerHTML = `第 ${String(id).padStart(4, '0')} 条 <span class="current-ref-badge" id="currentRefBadge"></span><span class="style-badge" id="styleBadge"></span>`;
 
   // If this item has a recorded reference, use it
   const origRefName = item.ref_name || null;
@@ -329,7 +330,9 @@ function selectRef(name) {
     document.getElementById('refAudio').src = '/' + ref.path;
     document.getElementById('refText').textContent = `「${ref.text}」`;
     const badge = document.getElementById('currentRefBadge');
-    if (badge) badge.textContent = `当前参考: ${name}.WAV [${ref.style_label}]`;
+    if (badge) badge.textContent = `当前参考: ${name}.WAV`;
+    const styleBadge = document.getElementById('styleBadge');
+    if (styleBadge) styleBadge.textContent = ref.style_label;
   }
   renderRefGrid();
 }
