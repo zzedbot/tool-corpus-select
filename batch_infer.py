@@ -35,73 +35,24 @@ LOG_FILE = "batch_inference.log"
 
 # 参考音频库 — 按风格分类
 # 脚本启动时会自动检查音频时长，过滤掉 <3 秒的
-REFS = {
-    # 😮‍💨 慵懒/叹气/日常 (王也的招牌风格)
-    "lazy": [
-        ("wangyevoice/11.WAV", "差不多了吧，老铁。"),
-        ("wangyevoice/12.WAV", "哎，真是个会玩的姑娘啊。"),
-        ("wangyevoice/19.WAV", "哎，就说没那么容易嘛。"),
-        ("wangyevoice/35.WAV", "啊，算了，本就不该来。"),
-        ("wangyevoice/60.WAV", "哎，妹子，让我长了不少姿势。"),
-        ("wangyevoice/100.WAV", "哎，我是一口都吃不下了，怎么样？张楚兰，能选了吗？"),
-        ("wangyevoice/109.WAV", "什么人呐？还以为能给我送机票呢。"),
-        ("wangyevoice/118.WAV", "嘿嘿，那是那是，老天师，我也不想没事给自己找事儿。"),
-        ("wangyevoice/108.WAV", "你这货居，然用听风萦偷听。"),
-        ("wangyevoice/129.WAV", "还是这么狗血呀，这个家"),
-    ],
-    # 📜 沉稳/论述/长篇 (适合正式内容、成语诗词)
-    "serious": [
-        ("wangyevoice/70.WAV", "过去无可挽回，未来可以改变。"),
-        ("wangyevoice/26.WAV", "既然大家都是术士，就没必要像其他人斗得那么辛苦了。"),
-        ("wangyevoice/28.WAV", "术士就要顺势而为，诸葛卿，我没有半点侮辱你的意思。"),
-        ("wangyevoice/40.WAV", "身在这个奇门局中，我即是方位，我即是吉凶。"),
-        ("wangyevoice/55.WAV", "反正不管懂不懂那规则，你我都和一般人一样被束缚着，不是吗。"),
-        ("wangyevoice/87.WAV", "真常应物，真常得性，常应常静，常清静矣"),
-        ("wangyevoice/90.WAV", "这就牵扯到另一个概念了，我管它叫，命运的权重。"),
-        ("wangyevoice/91.WAV", "这个世界没有一刻是静止的，个体变化的总和，就是整个世界的变化。"),
-        ("wangyevoice/93.WAV", "有人殚精竭虑，却掀不起风浪。有人一念之差，却让世界天翻地覆。"),
-        ("wangyevoice/86.WAV", "我说的是一直求而不得，一旦得到，要为了他舍弃一切的东西，那，才配称为最想要。"),
-    ],
-    # 💬 对话/轻松/短句 (适合日常对话、短句)
-    "casual": [
-        ("wangyevoice/2.WAV", "武当派，王也，施主您怎么称呼？"),
-        ("wangyevoice/34.WAV", "这就对了嘛。"),
-        ("wangyevoice/64.WAV", "没事儿，就这么比吧。"),
-        ("wangyevoice/65.WAV", "是比呀，这罗天大教也没规定非得比打架呀。"),
-        ("wangyevoice/66.WAV", "咱们都是道士，又不是战士，我跟这货比谁能吃，不行吗？"),
-        ("wangyevoice/107.WAV", "小白，回去记得多练练胆儿啊。"),
-        ("wangyevoice/134.WAV", "杜哥，你联络一下金媛媛他们呗。"),
-        ("wangyevoice/127.WAV", "六味地黄，枸杞，海马肝，袋鼠精。"),
-        ("wangyevoice/13.WAV", "好歹是揉上了。"),
-        ("wangyevoice/18.WAV", "昆仑。"),
-    ],
-    # ❓ 疑问/反问 (适合带问号的句子)
-    "question": [
-        ("wangyevoice/24.WAV", "诸葛卿，你败过吗？"),
-        ("wangyevoice/25.WAV", "那你觉得你能接受自己失败吗？"),
-        ("wangyevoice/31.WAV", "诸葛卿，你觉得怎么样？"),
-        ("wangyevoice/68.WAV", "张楚岚，知道占卜是怎么一回事吗？"),
-        ("wangyevoice/106.WAV", "你们兄弟准备回去了吗？"),
-        ("wangyevoice/122.WAV", "我不是已经被武当除名了吗"),
-        ("wangyevoice/124.WAV", "杜哥，趁着不堵车，能不能再开快点儿？"),
-        ("wangyevoice/130.WAV", "不好说啊，杜哥说正事，怎么样？"),
-        ("wangyevoice/10.WAV", "确实有两把刷子，你老爹把你调教的不错。"),
-        ("wangyevoice/39.WAV", "懂了吗？和其他术士踏方位巡吉凶不同。"),
-    ],
-    # ⚡ 严肃/告诫/气势 (适合绕口令、重要宣言)
-    "strong": [
-        ("wangyevoice/5.WAV", "老天师，武当王也，拜见老天师。"),
-        ("wangyevoice/15.WAV", "阴手，逮到你了。"),
-        ("wangyevoice/115.WAV", "老天师，千万别，别说做，想都别想。"),
-        ("wangyevoice/117.WAV", "您这一劫应在诸葛清的身上了，他的麻烦，我会处理。"),
-        ("wangyevoice/120.WAV", "成吧，那就得罪了。"),
-        ("wangyevoice/133.WAV", "一般人身手再好也不管用，一定得是圈儿里人，啊，没想到我也有为钱发愁的一天呐。"),
-        ("wangyevoice/136.WAV", "咱们也被人盯上了，盯哨的人就在附近。"),
-        ("wangyevoice/29.WAV", "这话我只说一次，回去吧，诸葛卿，这对你来说是最好的结果。"),
-        ("wangyevoice/131.WAV", "别打听，而且什么细节都别问。"),
-        ("wangyevoice/132.WAV", "这样你还愿意帮我吗？雇俩圈里人，暗中照看每个家庭成员，但是不能让他们知道。"),
-    ],
-}
+REFS_FILE = "raw/refs.txt"
+
+def load_refs():
+    """从 raw/refs.txt 加载参考音频配置"""
+    refs = {}
+    with open(REFS_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('|', 2)
+            if len(parts) != 3:
+                continue
+            style, num, text = parts
+            refs.setdefault(style, []).append((f"wangyevoice/{num}.WAV", text))
+    return refs
+
+REFS = load_refs()
 
 # 模型路径
 GPT_MODEL = "GPT_weights_v2/wangye-e10.ckpt"

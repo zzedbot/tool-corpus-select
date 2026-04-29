@@ -20,6 +20,7 @@ OUTPUT_DIR = "wav"
 TEXT_FILE = "wangye_corpus_1000.txt"
 METADATA_FILE = "wav/metadata.csv"
 LOG_FILE = "wav/batch_inference.log"
+REFS_FILE = "raw/refs.txt"
 
 # 模型路径
 GPT_MODEL = "GPT_weights_v2/wangye-e10.ckpt"
@@ -30,70 +31,6 @@ TEMPERATURE = 0.7
 TOP_K = 8
 TOP_P = 0.8
 
-# 参考音频风格分类 (与 batch_infer.py 一致)
-REFS = {
-    "lazy": [
-        ("raw/wangyevoice/11.WAV", "差不多了吧，老铁。"),
-        ("raw/wangyevoice/12.WAV", "哎，真是个会玩的姑娘啊。"),
-        ("raw/wangyevoice/19.WAV", "哎，就说没那么容易嘛。"),
-        ("raw/wangyevoice/35.WAV", "啊，算了，本就不该来。"),
-        ("raw/wangyevoice/60.WAV", "哎，妹子，让我长了不少姿势。"),
-        ("raw/wangyevoice/100.WAV", "哎，我是一口都吃不下了，怎么样？张楚兰，能选了吗？"),
-        ("raw/wangyevoice/109.WAV", "什么人呐？还以为能给我送机票呢。"),
-        ("raw/wangyevoice/118.WAV", "嘿嘿，那是那是，老天师，我也不想没事给自己找事儿。"),
-        ("raw/wangyevoice/108.WAV", "你这货居，然用听风萦偷听。"),
-        ("raw/wangyevoice/129.WAV", "还是这么狗血呀，这个家"),
-    ],
-    "serious": [
-        ("raw/wangyevoice/70.WAV", "过去无可挽回，未来可以改变。"),
-        ("raw/wangyevoice/26.WAV", "既然大家都是术士，就没必要像其他人斗得那么辛苦了。"),
-        ("raw/wangyevoice/28.WAV", "术士就要顺势而为，诸葛卿，我没有半点侮辱你的意思。"),
-        ("raw/wangyevoice/40.WAV", "身在这个奇门局中，我即是方位，我即是吉凶。"),
-        ("raw/wangyevoice/55.WAV", "反正不管懂不懂那规则，你我都和一般人一样被束缚着，不是吗。"),
-        ("raw/wangyevoice/87.WAV", "真常应物，真常得性，常应常静，常清静矣"),
-        ("raw/wangyevoice/90.WAV", "这就牵扯到另一个概念了，我管它叫，命运的权重。"),
-        ("raw/wangyevoice/91.WAV", "这个世界没有一刻是静止的，个体变化的总和，就是整个世界的变化。"),
-        ("raw/wangyevoice/93.WAV", "有人殚精竭虑，却掀不起风浪。有人一念之差，却让世界天翻地覆。"),
-        ("raw/wangyevoice/86.WAV", "我说的是一直求而不得，一旦得到，要为了他舍弃一切的东西，那，才配称为最想要。"),
-    ],
-    "casual": [
-        ("raw/wangyevoice/2.WAV", "武当派，王也，施主您怎么称呼？"),
-        ("raw/wangyevoice/34.WAV", "这就对了嘛。"),
-        ("raw/wangyevoice/64.WAV", "没事儿，就这么比吧。"),
-        ("raw/wangyevoice/65.WAV", "是比呀，这罗天大教也没规定非得比打架呀。"),
-        ("raw/wangyevoice/66.WAV", "咱们都是道士，又不是战士，我跟这货比谁能吃，不行吗？"),
-        ("raw/wangyevoice/107.WAV", "小白，回去记得多练练胆儿啊。"),
-        ("raw/wangyevoice/134.WAV", "杜哥，你联络一下金媛媛他们呗。"),
-        ("raw/wangyevoice/127.WAV", "六味地黄，枸杞，海马肝，袋鼠精。"),
-        ("raw/wangyevoice/13.WAV", "好歹是揉上了。"),
-        ("raw/wangyevoice/18.WAV", "昆仑。"),
-    ],
-    "question": [
-        ("raw/wangyevoice/24.WAV", "诸葛卿，你败过吗？"),
-        ("raw/wangyevoice/25.WAV", "那你觉得你能接受自己失败吗？"),
-        ("raw/wangyevoice/31.WAV", "诸葛卿，你觉得怎么样？"),
-        ("raw/wangyevoice/68.WAV", "张楚岚，知道占卜是怎么一回事吗？"),
-        ("raw/wangyevoice/106.WAV", "你们兄弟准备回去了吗？"),
-        ("raw/wangyevoice/122.WAV", "我不是已经被武当除名了吗"),
-        ("raw/wangyevoice/124.WAV", "杜哥，趁着不堵车，能不能再开快点儿？"),
-        ("raw/wangyevoice/130.WAV", "不好说啊，杜哥说正事，怎么样？"),
-        ("raw/wangyevoice/10.WAV", "确实有两把刷子，你老爹把你调教的不错。"),
-        ("raw/wangyevoice/39.WAV", "懂了吗？和其他术士踏方位巡吉凶不同。"),
-    ],
-    "strong": [
-        ("raw/wangyevoice/5.WAV", "老天师，武当王也，拜见老天师。"),
-        ("raw/wangyevoice/15.WAV", "阴手，逮到你了。"),
-        ("raw/wangyevoice/115.WAV", "老天师，千万别，别说做，想都别想。"),
-        ("raw/wangyevoice/117.WAV", "您这一劫应在诸葛清的身上了，他的麻烦，我会处理。"),
-        ("raw/wangyevoice/120.WAV", "成吧，那就得罪了。"),
-        ("raw/wangyevoice/133.WAV", "一般人身手再好也不管用，一定得是圈儿里人，啊，没想到我也有为钱发愁的一天呐。"),
-        ("raw/wangyevoice/136.WAV", "咱们也被人盯上了，盯哨的人就在附近。"),
-        ("raw/wangyevoice/29.WAV", "这话我只说一次，回去吧，诸葛卿，这对你来说是最好的结果。"),
-        ("raw/wangyevoice/131.WAV", "别打听，而且什么细节都别问。"),
-        ("raw/wangyevoice/132.WAV", "这样你还愿意帮我吗？雇俩圈里人，暗中照看每个家庭成员，但是不能让他们知道。"),
-    ],
-}
-
 STYLE_LABELS = {
     "lazy": "😮‍💨 慵懒/日常",
     "serious": "📜 沉稳/长篇",
@@ -101,6 +38,25 @@ STYLE_LABELS = {
     "question": "❓ 疑问/反问",
     "strong": "⚡ 严肃/气势",
 }
+
+def load_refs():
+    """从 raw/refs.txt 加载参考音频配置"""
+    refs = {}
+    path = os.path.join(ROOT_DIR, REFS_FILE)
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('|', 2)
+            if len(parts) != 3:
+                continue
+            style, num, text = parts
+            refs.setdefault(style, []).append((f"raw/wangyevoice/{num}.WAV", text))
+    return refs
+
+# 初始化
+REFS = load_refs()
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 _models_loaded = False
