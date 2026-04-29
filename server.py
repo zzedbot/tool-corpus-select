@@ -141,6 +141,8 @@ def get_generated_status():
 
 # 参考音频映射数据库文件
 REF_MAPPING_FILE = "wav/ref_mapping.txt"
+# 锁定状态数据库文件
+LOCK_STATUS_FILE = "wav/lock_status.txt"
 
 # 缓存：{ corpus_id: (ref_name, ref_text) }
 _ref_cache = None
@@ -217,6 +219,45 @@ def get_generated_status():
         for f in os.listdir(wav_dir)
         if f.endswith('.wav') and f[:-4].isdigit()
     )
+
+
+# 锁定状态缓存：{ corpus_id: True }
+_lock_cache = None
+
+def load_lock_status():
+    """从 lock_status.txt 加载锁定状态"""
+    global _lock_cache
+    if _lock_cache is not None:
+        return _lock_cache
+    _lock_cache = set()
+    path = os.path.join(ROOT_DIR, LOCK_STATUS_FILE)
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.isdigit():
+                    _lock_cache.add(int(line))
+    return _lock_cache
+
+def save_lock_status():
+    """保存锁定状态到文件"""
+    global _lock_cache
+    path = os.path.join(ROOT_DIR, LOCK_STATUS_FILE)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        for cid in sorted(_lock_cache):
+            f.write(f"{cid}\n")
+
+def toggle_lock(corpus_id, locked):
+    """切换锁定状态"""
+    global _lock_cache
+    if _lock_cache is None:
+        load_lock_status()
+    if locked:
+        _lock_cache.add(corpus_id)
+    else:
+        _lock_cache.discard(corpus_id)
+    save_lock_status()
 
 
 def switch_models():
@@ -306,6 +347,7 @@ class TTSHandler(SimpleHTTPRequestHandler):
             corpus = load_corpus()
             generated = get_generated_status()
             ref_map = load_ref_mapping()
+            locked = load_lock_status()
             items = []
             for i, text in enumerate(corpus, 1):
                 ref_info = ref_map.get(i)
@@ -313,6 +355,7 @@ class TTSHandler(SimpleHTTPRequestHandler):
                     "id": i,
                     "text": text,
                     "generated": i in generated,
+                    "locked": i in locked,
                 }
                 if ref_info:
                     item["ref_name"] = ref_info[0]
@@ -366,6 +409,12 @@ class TTSHandler(SimpleHTTPRequestHandler):
             corpus = load_corpus()
             if corpus_id < 1 or corpus_id > len(corpus):
                 self._send_json({"error": f"编号 {corpus_id} 超出范围"}, 400)
+                return
+
+            # 检查锁定状态
+            locked = load_lock_status()
+            if corpus_id in locked:
+                self._send_json({"error": "该条目已锁定，请先解锁再修改"}, 403)
                 return
 
             text = corpus[corpus_id - 1]
@@ -456,9 +505,13 @@ class TTSHandler(SimpleHTTPRequestHandler):
             time.sleep(1)
 
             corpus = load_corpus()
-            results = {"success": [], "failed": []}
+            locked = load_lock_status()
+            results = {"success": [], "failed": [], "skipped_locked": []}
 
             for cid in ids:
+                if cid in locked:
+                    results["skipped_locked"].append(cid)
+                    continue
                 if cid < 1 or cid > len(corpus):
                     results["failed"].append({"id": cid, "error": "超出范围"})
                     continue
@@ -479,6 +532,18 @@ class TTSHandler(SimpleHTTPRequestHandler):
             print(f"\n  批量完成: 成功 {len(results['success'])}, 失败 {len(results['failed'])}\n")
             self._send_json(results)
 
+        elif path.startswith('/api/lock/'):
+            data = self._read_body()
+            try:
+                corpus_id = int(path.split('/')[-1])
+            except ValueError:
+                self._send_json({"error": "无效编号"}, 400)
+                return
+            locked = data.get('locked', False)
+            toggle_lock(corpus_id, locked)
+            print(f"\n  [锁定] 第 {corpus_id:04d} 条 {'已锁定' if locked else '已解锁'}")
+            self._send_json({"success": True, "id": corpus_id, "locked": locked})
+
         else:
             self._send_json({"error": "Not found"}, 404)
 
@@ -491,6 +556,12 @@ class TTSHandler(SimpleHTTPRequestHandler):
                 corpus_id = int(path.split('/')[-1])
             except ValueError:
                 self._send_json({"error": "无效编号"}, 400)
+                return
+
+            # 检查锁定状态
+            locked = load_lock_status()
+            if corpus_id in locked:
+                self._send_json({"error": "该条目已锁定，请先解锁再删除"}, 403)
                 return
 
             wav_path = os.path.join(ROOT_DIR, OUTPUT_DIR, f"{corpus_id:04d}.wav")

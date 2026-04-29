@@ -91,6 +91,8 @@ input, select { font-family: inherit; font-size: inherit; }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .current-ref-badge { display: inline-block; padding: 2px 8px; background: #e0efff; color: #4a90d9; border-radius: 4px; font-size: 12px; margin-left: 8px; }
 .style-badge { display: inline-block; padding: 2px 8px; background: #f0f0f0; color: #555; border-radius: 4px; font-size: 12px; margin-left: 4px; }
+.lock-btn { cursor: pointer; font-size: 12px; margin-left: 4px; user-select: none; opacity: 0.4; transition: opacity 0.15s; }
+.corpus-item:hover .lock-btn { opacity: 1; }
 </style>
 </head>
 <body>
@@ -106,6 +108,7 @@ input, select { font-family: inherit; font-size: inherit; }
           <option value="all">全部</option>
           <option value="generated">已生成</option>
           <option value="pending">未生成</option>
+          <option value="locked">已锁定</option>
         </select>
       </div>
     </div>
@@ -176,6 +179,7 @@ function renderList() {
     // Filter
     if (statusFilter === 'generated' && !item.generated) continue;
     if (statusFilter === 'pending' && item.generated) continue;
+    if (statusFilter === 'locked' && !item.locked) continue;
     if (search) {
       const s = search.toLowerCase();
       if (!item.id.toString().includes(s) && !item.text.toLowerCase().includes(s)) continue;
@@ -190,13 +194,16 @@ function renderList() {
       const styleLabel = ref ? ref.style_label : '';
       return `<span style="font-size:10px;color:#aaa;white-space:nowrap;">[${item.ref_name}${styleLabel ? '/' + styleLabel : ''}]</span>`;
     })() : '';
+    const lockIcon = item.locked ? '🔒' : '🔓';
+    const itemStyle = item.locked ? 'opacity: 0.6;' : '';
 
-    html += `<div class="corpus-item${isActive}" data-id="${item.id}" onclick="selectItem(${item.id})">
+    html += `<div class="corpus-item${isActive}" data-id="${item.id}" onclick="selectItem(${item.id})" style="${itemStyle}">
       <input class="checkbox" type="checkbox" ${checked} onclick="event.stopPropagation();toggleCheck(${item.id})" />
       <span class="id">${String(item.id).padStart(4, '0')}</span>
       <span class="text">${escHtml(item.text)}</span>
       ${refBadge}
       <span class="badge ${badgeClass}">${badgeText}</span>
+      <span class="lock-btn" onclick="event.stopPropagation();toggleLock(${item.id})" title="${item.locked ? '点击解锁' : '点击锁定'}">${lockIcon}</span>
     </div>`;
   }
 
@@ -209,6 +216,27 @@ function selectItem(id) {
   selectedId = id;
   renderList();
   renderDetail(id);
+  // Auto-play generated audio
+  setTimeout(() => {
+    const a = document.getElementById('genAudio');
+    if (a) { stopOtherAudio(a); a.currentTime = 0; a.play(); }
+  }, 100);
+}
+
+function toggleLock(id) {
+  const item = corpusData.find(c => c.id === id);
+  if (item) {
+    item.locked = !item.locked;
+    api(`/api/lock/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locked: item.locked })
+    }).then(res => {
+      if (res.error) toast(`锁定失败: ${res.error}`, 'error');
+    });
+    renderList();
+    renderDetail(id);
+  }
 }
 
 function toggleCheck(id) {
@@ -269,27 +297,32 @@ async function renderDetail(id) {
     </div>
 
     <div class="action-bar">
-      <button class="btn btn-primary" onclick="regenerate()" id="regenBtn" ${!item.generated && !selectedRefForRegen ? '' : ''}>
-        重新生成
+      <button class="btn btn-primary" onclick="regenerate()" id="regenBtn" ${item.locked ? 'disabled title="已锁定"' : ''}>
+        ${item.locked ? '🔒 已锁定' : '重新生成'}
       </button>
       <button class="btn btn-secondary" onclick="playRef()">播放参照</button>
       <button class="btn btn-secondary" onclick="playGen()" ${!item.generated ? 'disabled' : ''}>播放生成</button>
-      <button class="btn btn-danger" onclick="deleteWav(${id})" ${!item.generated ? 'disabled' : ''}>删除生成</button>
+      <button class="btn btn-danger" onclick="deleteWav(${id})" ${!item.generated || item.locked ? 'disabled' : ''}>删除生成</button>
     </div>
   </div>`;
 
   renderRefFilter();
   renderRefGrid();
 
+  // Bind audio events to prevent simultaneous playback
+  const refA = document.getElementById('refAudio');
+  const genA = document.getElementById('genAudio');
+  if (refA) refA.addEventListener('play', () => { if (genA && !genA.paused) genA.pause(); });
+  if (genA) genA.addEventListener('play', () => { if (refA && !refA.paused) refA.pause(); });
+
   // Preserve user's selected ref if they already chose one, otherwise use original ref
   const preservedRef = selectedRefForRegen;
   if (preservedRef && refsData.find(r => r.name === preservedRef)) {
-    // User had already selected a ref — keep it
-    selectRef(preservedRef);
+    selectRef(preservedRef, false);
   } else if (origRef) {
-    selectRef(origRef.name);
+    selectRef(origRef.name, false);
   } else if (refsData.length > 0) {
-    selectRef(refsData[0].name);
+    selectRef(refsData[0].name, false);
   }
 }
 
@@ -323,34 +356,54 @@ function setStyle(style) {
   renderRefGrid();
 }
 
-function selectRef(name) {
+function selectRef(name, play = true) {
   selectedRefForRegen = name;
   const ref = refsData.find(r => r.name === name);
   if (ref) {
     document.getElementById('refAudio').src = '/' + ref.path;
+    document.getElementById('refAudio').currentTime = 0;
     document.getElementById('refText').textContent = `「${ref.text}」`;
     const badge = document.getElementById('currentRefBadge');
     if (badge) badge.textContent = `当前参考: ${name}.WAV`;
     const styleBadge = document.getElementById('styleBadge');
     if (styleBadge) styleBadge.textContent = ref.style_label;
+    if (play) {
+      setTimeout(() => {
+        const a = document.getElementById('refAudio');
+        if (a) { stopOtherAudio(a); a.currentTime = 0; a.play(); }
+      }, 50);
+    }
   }
   renderRefGrid();
 }
 
 // ========== Audio Control ==========
+function stopOtherAudio(currentAudio) {
+  ['refAudio', 'genAudio'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el !== currentAudio && !el.paused) { el.pause(); el.currentTime = 0; }
+  });
+}
+
 function playRef() {
   const a = document.getElementById('refAudio');
-  if (a && a.src) a.play();
+  if (a && a.src) { stopOtherAudio(a); a.currentTime = 0; a.play(); }
 }
 
 function playGen() {
   const a = document.getElementById('genAudio');
-  if (a) a.play();
+  if (a) { stopOtherAudio(a); a.currentTime = 0; a.play(); }
 }
 
 // ========== Actions ==========
 async function regenerate() {
   if (!selectedId) return;
+
+  const item = corpusData.find(c => c.id === selectedId);
+  if (item && item.locked) {
+    toast('该条目已锁定，请先解锁再修改', 'error');
+    return;
+  }
 
   const refName = selectedRefForRegen;
   if (!refName) {
@@ -398,6 +451,11 @@ async function regenerate() {
 }
 
 async function deleteWav(id) {
+  const item = corpusData.find(c => c.id === id);
+  if (item && item.locked) {
+    toast('该条目已锁定，请先解锁再删除', 'error');
+    return;
+  }
   if (!confirm(`确定删除第 ${String(id).padStart(4, '0')} 条的生成音频？`)) return;
 
   try {
@@ -418,8 +476,20 @@ async function deleteWav(id) {
 }
 
 async function batchRegenerate() {
-  const ids = Array.from(checkedIds);
-  if (ids.length === 0) return;
+  const allChecked = Array.from(checkedIds);
+  // Filter out locked items
+  const ids = allChecked.filter(id => {
+    const item = corpusData.find(c => c.id === id);
+    return !item || !item.locked;
+  });
+  const lockedCount = allChecked.length - ids.length;
+  if (lockedCount > 0) {
+    toast(`已跳过 ${lockedCount} 条已锁定的语料`, 'info');
+  }
+  if (ids.length === 0) {
+    if (lockedCount === 0) toast('请先勾选要生成的语料', 'info');
+    return;
+  }
 
   const refName = selectedRefForRegen;
   if (!refName) {
@@ -443,7 +513,10 @@ async function batchRegenerate() {
     } else {
       const ok = res.success.length;
       const fail = res.failed.length;
-      toast(`批量生成完成: 成功 ${ok} 条，失败 ${fail} 条`, ok > 0 ? 'success' : 'error');
+      const skipped = (res.skipped_locked || []).length;
+      let msg = `批量生成完成: 成功 ${ok} 条，失败 ${fail} 条`;
+      if (skipped > 0) msg += `，跳过已锁定 ${skipped} 条`;
+      toast(msg, ok > 0 ? 'success' : 'info');
 
       // Update state
       const ref = refsData.find(r => r.name === refName);
@@ -468,8 +541,19 @@ async function batchRegenerate() {
 }
 
 async function batchDelete() {
-  const ids = Array.from(checkedIds);
-  if (ids.length === 0) return;
+  const allChecked = Array.from(checkedIds);
+  const ids = allChecked.filter(id => {
+    const item = corpusData.find(c => c.id === id);
+    return !item || !item.locked;
+  });
+  const lockedCount = allChecked.length - ids.length;
+  if (lockedCount > 0) {
+    toast(`已跳过 ${lockedCount} 条已锁定的语料`, 'info');
+  }
+  if (ids.length === 0) {
+    if (lockedCount === 0) toast('请先勾选要删除的语料', 'info');
+    return;
+  }
   if (!confirm(`确定删除 ${ids.length} 条生成音频？`)) return;
 
   let success = 0, failed = 0;
