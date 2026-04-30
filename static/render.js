@@ -28,7 +28,7 @@ function switchTab(tab) {
 
 function updateStatusBar() {
   const gen = corpusData.filter(c => c.generated).length;
-  document.getElementById('statusBar').textContent = `已生成 ${gen} / ${corpusData.length} 条`;
+  document.getElementById('statusText').textContent = `已生成 ${gen} / ${corpusData.length} 条`;
   updateTabCounts();
 }
 
@@ -58,7 +58,13 @@ function renderList() {
     if (statusFilter === 'generated' && !item.generated) return false;
     if (statusFilter === 'pending' && item.generated) return false;
     if (ratingFilter !== 'none' && item.rating !== ratingFilter) return false;
-    if (dnsmosFilter !== 'none' && (!item.dnsmos || item.dnsmos < parseFloat(dnsmosFilter))) return false;
+    if (dnsmosFilter !== 'none') {
+      if (dnsmosFilter === 'lt3.0') {
+        if (!item.dnsmos || item.dnsmos >= 3.0) return false;
+      } else {
+        if (!item.dnsmos || item.dnsmos < parseFloat(dnsmosFilter)) return false;
+      }
+    }
     if (search) {
       const s = search.toLowerCase();
       if (!item.id.toString().includes(s) && !item.text.toLowerCase().includes(s)) return false;
@@ -98,7 +104,7 @@ function renderList() {
     const ratingBadge = item.rating ? `<span class="rating-badge rating-${item.rating}">${RATING_LABELS[item.rating]}</span>` : '';
     const dnsmosBadge = item.dnsmos ? `<span class="dnsmos-badge">${item.dnsmos.toFixed(2)}</span>` : '';
 
-    html += `<div class="corpus-item${isActive}" data-id="${item.id}" onclick="selectItem(${item.id}, event)" style="${itemStyle}">
+    html += `<div class="corpus-item${isActive}" data-id="${item.id}" role="button" tabindex="0" onclick="selectItem(${item.id}, event)" onkeydown="if(event.key==='Enter'||event.key===' ')selectItem(${item.id}, event)" style="${itemStyle}">
       <input class="checkbox" type="checkbox" ${checked} onclick="event.stopPropagation();toggleCheck(${item.id}, event)" />
       <div class="item-main">
         <div class="item-top">
@@ -111,7 +117,7 @@ function renderList() {
           <div class="item-meta-right">${ratingBadge}</div>
         </div>
       </div>
-      <span class="lock-btn" onclick="event.stopPropagation();toggleLock(${item.id})" title="${item.locked ? '点击解锁' : '点击锁定'}">${lockIcon}</span>
+      <span class="lock-btn" role="button" tabindex="0" onclick="event.stopPropagation();toggleLock(${item.id})" onkeydown="if(event.key==='Enter'||event.key===' ')toggleLock(${item.id})" title="${item.locked ? '点击解锁' : '点击锁定'}">${lockIcon}</span>
     </div>`;
   }
 
