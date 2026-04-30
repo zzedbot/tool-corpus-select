@@ -12,6 +12,7 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import threading
+import subprocess
 
 HOST = "0.0.0.0"
 PORT = 8888
@@ -274,6 +275,55 @@ def set_rating(corpus_id, rating):
     save_ratings()
 
 
+# ========== DNMOS 评分 ==========
+_dnsmos_cache = None
+
+def load_dnsmos_scores():
+    """从 wav/dnsmos_scores.txt 加载 DNMOS 评分"""
+    global _dnsmos_cache
+    if _dnsmos_cache is not None:
+        return _dnsmos_cache
+    _dnsmos_cache = {}
+    path = os.path.join(ROOT_DIR, "wav/dnsmos_scores.txt")
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                parts = line.strip().split("|")
+                if len(parts) == 2 and parts[0].isdigit():
+                    _dnsmos_cache[int(parts[0])] = float(parts[1])
+    return _dnsmos_cache
+
+def score_single_async(cid):
+    """后台线程：对单条音频进行 DNMOS 评分"""
+    try:
+        result = subprocess.run(
+            ["python", "dnsmos_score.py", "--id", str(cid)],
+            capture_output=True, text=True, timeout=60
+        )
+        if result.returncode == 0:
+            # 清除缓存以便下次重新加载
+            global _dnsmos_cache
+            _dnsmos_cache = None
+            print(f"[DNMOS] 第 {cid:04d} 条评分完成")
+        else:
+            print(f"[DNMOS] 第 {cid:04d} 条评分失败: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"[DNMOS] 第 {cid:04d} 条评分异常: {e}")
+
+def auto_score_startup():
+    """启动时后台评分所有未评分的已生成音频"""
+    generated = get_generated_status()
+    existing = load_dnsmos_scores()
+    unscored = generated - set(existing.keys())
+    if not unscored:
+        return
+    print(f"\n[DNMOS] 发现 {len(unscored)} 条未评分音频，后台启动评分...")
+    threading.Thread(target=lambda: subprocess.run(
+        ["python", "dnsmos_score.py", "--skip-scored"],
+        capture_output=True, text=True, timeout=3600
+    ), daemon=True).start()
+
+
 def switch_models():
     global _models_loaded
     if _models_loaded:
@@ -363,6 +413,7 @@ class TTSHandler(SimpleHTTPRequestHandler):
             ref_map = load_ref_mapping()
             locked = load_lock_status()
             ratings = load_ratings()
+            dnsmos = load_dnsmos_scores()
             items = []
             for i, text in enumerate(corpus, 1):
                 ref_info = ref_map.get(i)
@@ -372,6 +423,7 @@ class TTSHandler(SimpleHTTPRequestHandler):
                     "generated": i in generated,
                     "locked": i in locked,
                     "rating": ratings.get(i),
+                    "dnsmos": dnsmos.get(i),
                 }
                 if ref_info:
                     item["ref_name"] = ref_info[0]
@@ -475,6 +527,8 @@ class TTSHandler(SimpleHTTPRequestHandler):
                 # 更新参考音频映射数据库
                 update_ref_mapping(corpus_id, ref_name, ref_text)
                 print(f"  映射已更新: {corpus_id} -> {ref_name}.WAV")
+                # 后台 DNMOS 评分
+                threading.Thread(target=score_single_async, args=(corpus_id,), daemon=True).start()
                 print(f"  结果: 成功\n")
                 self._send_json({"success": True, "id": corpus_id, "ref": ref_name, "ref_text": ref_text})
             else:
@@ -619,6 +673,9 @@ def main():
     print(f"   访问地址: http://localhost:{args.port}")
     print(f"   GPT-SoVITS API: {API_BASE}")
     print()
+
+    # 启动时后台评分未评分的音频
+    auto_score_startup()
 
     server = HTTPServer((HOST, args.port), TTSHandler)
     try:

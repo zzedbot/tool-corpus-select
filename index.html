@@ -38,11 +38,20 @@
         <button class="filter-btn filter-fair" data-value="fair" onclick="setRatingFilter('fair')">一般</button>
         <button class="filter-btn filter-poor" data-value="poor" onclick="setRatingFilter('poor')">差</button>
       </div>
+      <label>DNMOS:</label>
+      <div class="dnsmos-filter-btns" id="dnsmosFilterBtns">
+        <button class="filter-btn active" data-value="none" onclick="setDnsmosFilter('none')">全部</button>
+        <button class="filter-btn filter-dnsmos" data-value="4.0" onclick="setDnsmosFilter('4.0')">≥4.0</button>
+        <button class="filter-btn filter-dnsmos" data-value="3.5" onclick="setDnsmosFilter('3.5')">≥3.5</button>
+        <button class="filter-btn filter-dnsmos" data-value="3.0" onclick="setDnsmosFilter('3.0')">≥3.0</button>
+      </div>
       <label>排序:</label>
       <select id="ratingSort">
         <option value="none">默认</option>
         <option value="rating_asc">评级↑</option>
         <option value="rating_desc">评级↓</option>
+        <option value="dnsmos_asc">DNMOS↑</option>
+        <option value="dnsmos_desc">DNMOS↓</option>
       </select>
     </div>
     <div class="batch-row">
@@ -166,6 +175,12 @@
   </div>
 </div>
 
-<script src="/static/app.js"></script>
+<script src="/static/state.js"></script>
+<script src="/static/api.js"></script>
+<script src="/static/utils.js"></script>
+<script src="/static/render.js"></script>
+<script src="/static/actions.js"></script>
+<script src="/static/zen.js"></script>
+<script src="/static/main.js"></script>
 </body>
 </html>
