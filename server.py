@@ -21,6 +21,8 @@ TEXT_FILE = "wangye_corpus_1000.txt"
 METADATA_FILE = "wav/metadata.csv"
 LOG_FILE = "wav/batch_inference.log"
 REFS_FILE = "raw/refs.txt"
+RATING_FILE = "wav/rating.txt"
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 模型路径
 GPT_MODEL = "GPT_weights_v2/wangye-e10.ckpt"
@@ -57,8 +59,6 @@ def load_refs():
 
 # 初始化
 REFS = load_refs()
-
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 _models_loaded = False
 
 # 将参考音频路径转为绝对路径（GPT-SoVITS API 需要绝对路径或相对于其自身工作目录的路径）
@@ -130,7 +130,7 @@ def load_ref_mapping():
     # 第一步：从日志解析
     log_path = os.path.join(ROOT_DIR, LOG_FILE)
     if os.path.exists(log_path):
-        pattern = re.compile(r'\[\d+\]\s*↳\s*参考:(\d+)\.WAV「(.+?)」')
+        pattern = re.compile(r'↳\s*参考:(\d+)\.WAV「(.+?)」')
         current_id = None
         with open(log_path, 'r', encoding='utf-8') as f:
             for line in f:
@@ -214,6 +214,64 @@ def toggle_lock(corpus_id, locked):
     else:
         _lock_cache.discard(corpus_id)
     save_lock_status()
+
+
+# 评级缓存：{ corpus_id: rating_level }
+_rating_cache = None
+VALID_RATINGS = {'excellent', 'good', 'fair', 'poor'}
+RATING_LABELS = {
+    'excellent': '优秀',
+    'good': '良好',
+    'fair': '一般',
+    'poor': '差',
+}
+RATING_COLORS = {
+    'excellent': '#1a7f37',
+    'good': '#4a90d9',
+    'fair': '#e65100',
+    'poor': '#d93025',
+}
+
+
+def load_ratings():
+    """从 wav/rating.txt 加载评级"""
+    global _rating_cache
+    if _rating_cache is not None:
+        return _rating_cache
+    _rating_cache = {}
+    path = os.path.join(ROOT_DIR, RATING_FILE)
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '|' in line:
+                    parts = line.split('|')
+                    if len(parts) == 2 and parts[0].isdigit() and parts[1] in VALID_RATINGS:
+                        _rating_cache[int(parts[0])] = parts[1]
+    return _rating_cache
+
+
+def save_ratings():
+    """保存评级到文件"""
+    global _rating_cache
+    path = os.path.join(ROOT_DIR, RATING_FILE)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        for cid in sorted(_rating_cache.keys()):
+            f.write(f"{cid}|{_rating_cache[cid]}\n")
+
+
+def set_rating(corpus_id, rating):
+    """设置语料评级"""
+    global _rating_cache
+    if _rating_cache is None:
+        load_ratings()
+    if rating == 'none' or rating not in VALID_RATINGS:
+        if corpus_id in _rating_cache:
+            del _rating_cache[corpus_id]
+    else:
+        _rating_cache[corpus_id] = rating
+    save_ratings()
 
 
 def switch_models():
@@ -304,6 +362,7 @@ class TTSHandler(SimpleHTTPRequestHandler):
             generated = get_generated_status()
             ref_map = load_ref_mapping()
             locked = load_lock_status()
+            ratings = load_ratings()
             items = []
             for i, text in enumerate(corpus, 1):
                 ref_info = ref_map.get(i)
@@ -312,6 +371,7 @@ class TTSHandler(SimpleHTTPRequestHandler):
                     "text": text,
                     "generated": i in generated,
                     "locked": i in locked,
+                    "rating": ratings.get(i),
                 }
                 if ref_info:
                     item["ref_name"] = ref_info[0]
@@ -499,6 +559,22 @@ class TTSHandler(SimpleHTTPRequestHandler):
             toggle_lock(corpus_id, locked)
             print(f"\n  [锁定] 第 {corpus_id:04d} 条 {'已锁定' if locked else '已解锁'}")
             self._send_json({"success": True, "id": corpus_id, "locked": locked})
+
+        elif path.startswith('/api/rating/'):
+            data = self._read_body()
+            try:
+                corpus_id = int(path.split('/')[-1])
+            except ValueError:
+                self._send_json({"error": "无效编号"}, 400)
+                return
+            rating = data.get('rating', 'none')
+            if rating != 'none' and rating not in VALID_RATINGS:
+                self._send_json({"error": f"无效评级，可选: {', '.join(VALID_RATINGS)}"}, 400)
+                return
+            set_rating(corpus_id, rating)
+            label = RATING_LABELS.get(rating, '无')
+            print(f"\n  [评级] 第 {corpus_id:04d} 条 -> {label}")
+            self._send_json({"success": True, "id": corpus_id, "rating": rating})
 
         else:
             self._send_json({"error": "Not found"}, 404)
