@@ -273,8 +273,10 @@ function setDnsmosFilter(value) {
 
 // ========== DNMOS 评分进度 ==========
 let _dnsmosPollInterval = null;
+let _dnsmosCompleted = false;
 
 function startDnsmosScoring() {
+  _dnsmosCompleted = false; // Reset completion flag
   const ids = Array.from(checkedIds).filter(id => {
     const item = corpusData.find(c => c.id === id);
     return item && item.generated; // 只对已生成的评分
@@ -287,7 +289,7 @@ function startDnsmosScoring() {
   api('/api/dnsmos/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids: ids.length > 0 ? ids : null, skip_scored: true })
+    body: JSON.stringify({ ids: ids.length > 0 ? ids : null, skip_scored: false })
   }).then(res => {
     if (res.error) {
       toast(`评分失败: ${res.error}`, 'error');
@@ -297,6 +299,7 @@ function startDnsmosScoring() {
 }
 
 function stopDnsmosScoring() {
+  _dnsmosCompleted = false;
   api('/api/dnsmos/stop', { method: 'POST' }).then(() => {
     updateDnsmosPanel();
     toast('评分已取消', 'info');
@@ -306,41 +309,37 @@ function stopDnsmosScoring() {
 function updateDnsmosPanel() {
   api('/api/dnsmos/status').then(status => {
     const startBtn = document.getElementById('dnsmosStartBtn');
-    const stopBtn = document.getElementById('dnsmosStopBtn');
     const progressDiv = document.getElementById('dnsmosProgress');
     const fill = document.getElementById('dnsmosProgressFill');
-    const text = document.getElementById('dnsmosStatusText');
+    const progressText = document.getElementById('dnsmosProgressText');
 
     if (status.active) {
       startBtn.style.display = 'none';
-      stopBtn.style.display = '';
-      progressDiv.style.display = 'block';
+      progressDiv.style.display = 'flex';
       const pct = status.total > 0 ? (status.done / status.total * 100) : 0;
       fill.style.width = pct + '%';
-      text.textContent = `${status.done} / ${status.total} — 当前: ${String(status.current_id).padStart(4,'0')} → ${status.current_score ? status.current_score.toFixed(2) : '...'}`;
+      progressText.textContent = `${status.done}/${status.total} ${String(status.current_id).padStart(4,'0')}→${status.current_score ? status.current_score.toFixed(2) : '...'}`;
+      _dnsmosCompleted = false;
     } else if (status.error) {
-      // 评分出错但未激活
       startBtn.style.display = '';
-      stopBtn.style.display = 'none';
-      progressDiv.style.display = 'block';
+      progressDiv.style.display = 'flex';
       fill.style.width = '0%';
-      text.innerHTML = `<span class="dnsmos-error">${status.error}</span>`;
-    } else if (status.done > 0) {
-      startBtn.style.display = '';
-      stopBtn.style.display = 'none';
-      if (status.done > 0) {
-        progressDiv.style.display = 'block';
-        fill.style.width = '100%';
-        text.textContent = `评分完成: ${status.done} / ${status.total}`;
-        // Refresh list to show new scores
-        loadData();
-        // Hide progress after 3 seconds
-        setTimeout(() => {
-          document.getElementById('dnsmosProgress').style.display = 'none';
-        }, 3000);
-      } else {
+      progressText.textContent = `评分失败`;
+      _dnsmosCompleted = false;
+    } else if (status.total > 0 && status.done === status.total && !_dnsmosCompleted) {
+      _dnsmosCompleted = true;
+      startBtn.style.display = 'none';
+      progressDiv.style.display = 'flex';
+      fill.style.width = '100%';
+      progressText.textContent = `评分完成 ${status.done}/${status.total}`;
+      loadData();
+      setTimeout(() => {
         progressDiv.style.display = 'none';
-      }
+        startBtn.style.display = '';
+      }, 5000);
+    } else {
+      startBtn.style.display = '';
+      progressDiv.style.display = 'none';
     }
   });
 }

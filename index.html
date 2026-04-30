@@ -8,13 +8,17 @@
 </head>
 <body>
 
-<button class="zen-trigger-btn" onclick="startZenMode()">🎧 Zen模式</button>
-
 <div class="app">
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-header">
-      <h1>TTS 语料挑选 — 王也音色</h1>
+      <div class="header-top">
+        <h1>TTS 语料挑选</h1>
+        <div class="header-actions">
+          <button class="action-btn" onclick="startDnsmosScoring()" id="dnsmosStartBtn" title="DNMOS 自动评分">🔊 评分</button>
+          <button class="action-btn" onclick="startZenMode()" title="Zen 模式">🎧 Zen</button>
+        </div>
+      </div>
       <div class="search-row">
         <input type="text" id="searchInput" placeholder="搜索编号或文本..." />
         <select id="statusFilter">
@@ -27,27 +31,36 @@
         <button class="tab-btn active" id="tabUnlocked" onclick="switchTab('unlocked')">未锁定<span class="tab-count" id="unlockedCount"></span></button>
         <button class="tab-btn" id="tabLocked" onclick="switchTab('locked')">已锁定<span class="tab-count" id="lockedCount"></span></button>
       </div>
+      <div class="status-row" id="statusRow">
+        <span id="statusText">加载中...</span>
+        <div class="dnsmos-inline-progress" id="dnsmosProgress" style="display:none">
+          <span id="dnsmosProgressText"></span>
+          <div class="dnsmos-mini-bar"><div class="dnsmos-mini-fill" id="dnsmosProgressFill"></div></div>
+          <button class="dnsmos-cancel-btn" onclick="stopDnsmosScoring()">✕</button>
+        </div>
+      </div>
     </div>
-    <div class="status-bar" id="statusBar">加载中...</div>
     <div class="filter-row">
-      <label>评级筛选:</label>
+      <span class="filter-label">评级</span>
       <div class="rating-filter-btns" id="ratingFilterBtns">
         <button class="filter-btn active" data-value="none" onclick="setRatingFilter('none')">全部</button>
-        <button class="filter-btn filter-excellent" data-value="excellent" onclick="setRatingFilter('excellent')">优秀</button>
-        <button class="filter-btn filter-good" data-value="good" onclick="setRatingFilter('good')">良好</button>
+        <button class="filter-btn filter-excellent" data-value="excellent" onclick="setRatingFilter('excellent')">优</button>
+        <button class="filter-btn filter-good" data-value="good" onclick="setRatingFilter('good')">良</button>
         <button class="filter-btn filter-fair" data-value="fair" onclick="setRatingFilter('fair')">一般</button>
         <button class="filter-btn filter-poor" data-value="poor" onclick="setRatingFilter('poor')">差</button>
       </div>
-      <label>DNMOS:</label>
+    </div>
+    <div class="filter-row filter-row-compact">
+      <span class="filter-label">DNMOS</span>
       <div class="dnsmos-filter-btns" id="dnsmosFilterBtns">
         <button class="filter-btn active" data-value="none" onclick="setDnsmosFilter('none')">全部</button>
         <button class="filter-btn filter-dnsmos" data-value="4.0" onclick="setDnsmosFilter('4.0')">≥4.0</button>
         <button class="filter-btn filter-dnsmos" data-value="3.5" onclick="setDnsmosFilter('3.5')">≥3.5</button>
         <button class="filter-btn filter-dnsmos" data-value="3.0" onclick="setDnsmosFilter('3.0')">≥3.0</button>
+        <button class="filter-btn filter-dnsmos" data-value="lt3.0" onclick="setDnsmosFilter('lt3.0')">&lt;3.0</button>
       </div>
-      <label>排序:</label>
       <select id="ratingSort">
-        <option value="none">默认</option>
+        <option value="none">排序: 默认</option>
         <option value="rating_asc">评级↑</option>
         <option value="rating_desc">评级↓</option>
         <option value="dnsmos_asc">DNMOS↑</option>
@@ -55,26 +68,11 @@
       </select>
     </div>
     <div class="batch-row">
-      <label>批量操作:</label>
       <input type="checkbox" id="selectAll" title="全选" />
-      <button class="btn btn-sm btn-secondary" onclick="batchRegenerate()" id="batchBtn" disabled>重新生成</button>
-      <button class="btn btn-sm btn-danger" onclick="batchDelete()" id="batchDelBtn" disabled>删除</button>
-      <button class="btn btn-sm btn-secondary" onclick="batchClearRatings()" id="batchClearRatingBtn">清空评级</button>
-    </div>
-    <div class="dnsmos-panel" id="dnsmosPanel">
-      <div class="dnsmos-header">
-        <span>🔊 DNMOS 自动评分</span>
-        <div>
-          <button class="btn btn-sm btn-primary" onclick="startDnsmosScoring()" id="dnsmosStartBtn">开始评分</button>
-          <button class="btn btn-sm btn-danger" onclick="stopDnsmosScoring()" id="dnsmosStopBtn" style="display:none">取消</button>
-        </div>
-      </div>
-      <div class="dnsmos-progress" id="dnsmosProgress" style="display:none">
-        <div class="dnsmos-progress-bar">
-          <div class="dnsmos-progress-fill" id="dnsmosProgressFill"></div>
-        </div>
-        <div class="dnsmos-status-text" id="dnsmosStatusText"></div>
-      </div>
+      <span class="batch-label">全选</span>
+      <button class="btn btn-xs btn-secondary" onclick="batchRegenerate()" id="batchBtn" disabled>重新生成</button>
+      <button class="btn btn-xs btn-danger" onclick="batchDelete()" id="batchDelBtn" disabled>删除</button>
+      <button class="btn btn-xs btn-secondary" onclick="batchClearRatings()" id="batchClearRatingBtn">清空评级</button>
     </div>
     <div class="corpus-list" id="corpusList"></div>
   </div>
