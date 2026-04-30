@@ -318,9 +318,16 @@ def _load_mos_model():
     if _mos_predictor is None:
         import torch
         import torchaudio
-        _mos_predictor = torch.hub.load(
-            "tarepan/SpeechMOS:v1.2.0", "utmos22_strong",
-            trust_repo=True, verbose=False)
+        try:
+            _mos_predictor = torch.hub.load(
+                "tarepan/SpeechMOS:v1.2.0", "utmos22_strong",
+                trust_repo=True, verbose=False)
+        except Exception as e:
+            err = str(e)
+            if any(kw in err.lower() for kw in ["winerror", "connection", "urlopen", "timeout", "network"]):
+                _mos_predictor = None  # 重置，允许下次重试
+                raise RuntimeError("网络超时，无法从 GitHub 下载模型。请检查网络后重试")
+            raise
     return _mos_predictor
 
 def _score_wav_file(path):
@@ -335,20 +342,25 @@ def _score_wav_file(path):
         waveform = torchaudio.functional.resample(waveform, sr, 16000)
     return p(waveform, sr=16000).item()
 
-def start_scoring(skip_scored=True):
-    """启动后台评分"""
+def start_scoring(ids=None, skip_scored=True):
+    """启动后台评分
+    ids: 指定评分的编号列表，None 表示全部
+    skip_scored: 是否跳过已有评分的条目
+    """
     if _score_progress["active"]:
         return {"error": "评分正在进行中"}
 
     generated = get_generated_status()
     existing = load_dnsmos_scores()
-    if skip_scored:
-        to_score = sorted(generated - set(existing.keys()))
+    if ids:
+        # 只对指定 ID 评分
+        to_score = sorted(set(ids) & generated - set(existing.keys())) if skip_scored else sorted(set(ids) & generated)
     else:
-        to_score = sorted(generated)
+        # 全部评分
+        to_score = sorted(generated - set(existing.keys())) if skip_scored else sorted(generated)
 
     if not to_score:
-        return {"message": "所有音频已有评分"}
+        return {"message": "没有需要评分的音频"}
 
     _score_progress["active"] = True
     _score_progress["total"] = len(to_score)
@@ -366,12 +378,16 @@ def start_scoring(skip_scored=True):
             try:
                 score = _score_wav_file(path)
                 scores[cid] = score
-                _score_progress["current_score"] = score
+                _score_progress["current_score"] = round(score, 2)
                 _score_progress["done"] += 1
                 print(f"[DNMOS] {cid:04d} → {score:.2f}")
             except Exception as e:
-                _score_progress["error"] = str(e)[:100]
-                print(f"[DNMOS] {cid:04d} 评分失败: {e}")
+                err_msg = str(e)
+                if "hub.load" in err_msg or "WinError" in err_msg or "connection" in err_msg.lower():
+                    err_msg = "网络超时，无法下载模型。请手动运行: python dnsmos_score.py --skip-scored"
+                _score_progress["error"] = err_msg[:150]
+                print(f"[DNMOS] {cid:04d} 评分失败: {err_msg}")
+                break  # 停止后续评分
             if _score_progress["done"] % 10 == 0:
                 save_scores_direct(scores)
                 _dnsmos_cache = None
@@ -478,8 +494,10 @@ class TTSHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _read_body(self):
-        length = int(self.headers.get('Content-Length', 0))
-        return json.loads(self.rfile.read(length).decode('utf-8'))
+        length = self.headers.get('Content-Length')
+        if not length:
+            return {}
+        return json.loads(self.rfile.read(int(length)).decode('utf-8'))
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -540,6 +558,9 @@ class TTSHandler(SimpleHTTPRequestHandler):
                 "generated_count": len(generated),
                 "total": len(load_corpus()),
             })
+
+        elif path == '/api/dnsmos/status':
+            self._send_json(dict(_score_progress))
 
         else:
             super().do_GET()
@@ -721,8 +742,9 @@ class TTSHandler(SimpleHTTPRequestHandler):
 
         elif path == '/api/dnsmos/start':
             data = self._read_body()
+            ids = data.get('ids')
             skip = data.get('skip_scored', True)
-            result = start_scoring(skip_scored=skip)
+            result = start_scoring(ids=ids, skip_scored=skip)
             if "error" in result:
                 self._send_json(result, 400)
             else:
@@ -775,9 +797,6 @@ def main():
     print(f"   访问地址: http://localhost:{args.port}")
     print(f"   GPT-SoVITS API: {API_BASE}")
     print()
-
-    # 启动时后台评分未评分的音频
-    auto_score_startup()
 
     server = HTTPServer((HOST, args.port), TTSHandler)
     try:

@@ -275,15 +275,22 @@ function setDnsmosFilter(value) {
 let _dnsmosPollInterval = null;
 
 function startDnsmosScoring() {
+  const ids = Array.from(checkedIds).filter(id => {
+    const item = corpusData.find(c => c.id === id);
+    return item && item.generated; // 只对已生成的评分
+  });
+  const msg = ids.length > 0
+    ? `开始对 ${ids.length} 条勾选的音频评分`
+    : '开始对全部音频评分';
+  toast(msg, 'info');
+
   api('/api/dnsmos/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ skip_scored: true })
+    body: JSON.stringify({ ids: ids.length > 0 ? ids : null, skip_scored: true })
   }).then(res => {
     if (res.error) {
       toast(`评分失败: ${res.error}`, 'error');
-    } else {
-      toast(res.message, 'info');
     }
     updateDnsmosPanel();
   });
@@ -311,7 +318,14 @@ function updateDnsmosPanel() {
       const pct = status.total > 0 ? (status.done / status.total * 100) : 0;
       fill.style.width = pct + '%';
       text.textContent = `${status.done} / ${status.total} — 当前: ${String(status.current_id).padStart(4,'0')} → ${status.current_score ? status.current_score.toFixed(2) : '...'}`;
-    } else {
+    } else if (status.error) {
+      // 评分出错但未激活
+      startBtn.style.display = '';
+      stopBtn.style.display = 'none';
+      progressDiv.style.display = 'block';
+      fill.style.width = '0%';
+      text.innerHTML = `<span class="dnsmos-error">${status.error}</span>`;
+    } else if (status.done > 0) {
       startBtn.style.display = '';
       stopBtn.style.display = 'none';
       if (status.done > 0) {
