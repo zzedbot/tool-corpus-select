@@ -61,6 +61,21 @@
       <button class="btn btn-sm btn-danger" onclick="batchDelete()" id="batchDelBtn" disabled>删除</button>
       <button class="btn btn-sm btn-secondary" onclick="batchClearRatings()" id="batchClearRatingBtn">清空评级</button>
     </div>
+    <div class="dnsmos-panel" id="dnsmosPanel">
+      <div class="dnsmos-header">
+        <span>🔊 DNMOS 自动评分</span>
+        <div>
+          <button class="btn btn-sm btn-primary" onclick="startDnsmosScoring()" id="dnsmosStartBtn">开始评分</button>
+          <button class="btn btn-sm btn-danger" onclick="stopDnsmosScoring()" id="dnsmosStopBtn" style="display:none">取消</button>
+        </div>
+      </div>
+      <div class="dnsmos-progress" id="dnsmosProgress" style="display:none">
+        <div class="dnsmos-progress-bar">
+          <div class="dnsmos-progress-fill" id="dnsmosProgressFill"></div>
+        </div>
+        <div class="dnsmos-status-text" id="dnsmosStatusText"></div>
+      </div>
+    </div>
     <div class="corpus-list" id="corpusList"></div>
   </div>
 

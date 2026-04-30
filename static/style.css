@@ -29,6 +29,12 @@ input, select { font-family: inherit; font-size: inherit; }
 .batch-row { padding: 8px 16px; border-bottom: 1px solid #e0e0e0; display: flex; gap: 6px; align-items: center; background: #fafafa; }
 .batch-row label { font-size: 12px; color: #666; white-space: nowrap; }
 .batch-row select { font-size: 12px; padding: 4px 6px; border: 1px solid #d0d0d0; border-radius: 4px; }
+.dnsmos-panel { padding: 10px 16px; border-bottom: 1px solid #e0e0e0; background: #f8f4ff; }
+.dnsmos-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; color: #6f42c1; }
+.dnsmos-progress { margin-top: 8px; }
+.dnsmos-progress-bar { height: 6px; background: #e0d0f0; border-radius: 3px; overflow: hidden; }
+.dnsmos-progress-fill { height: 100%; background: #6f42c1; border-radius: 3px; transition: width 0.5s ease; }
+.dnsmos-status-text { font-size: 11px; color: #6f42c1; margin-top: 4px; }
 .filter-row { padding: 8px 16px; border-bottom: 1px solid #e0e0e0; display: flex; gap: 6px; align-items: center; background: #fafafa; flex-wrap: wrap; }
 .filter-row label { font-size: 12px; color: #666; white-space: nowrap; }
 .filter-row select { font-size: 12px; padding: 4px 6px; border: 1px solid #d0d0d0; border-radius: 4px; }

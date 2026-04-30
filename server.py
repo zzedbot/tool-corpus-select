@@ -277,6 +277,17 @@ def set_rating(corpus_id, rating):
 
 # ========== DNMOS 评分 ==========
 _dnsmos_cache = None
+_mos_predictor = None
+
+# 评分进度状态
+_score_progress = {
+    "active": False,
+    "total": 0,
+    "done": 0,
+    "current_id": 0,
+    "current_score": 0,
+    "error": "",
+}
 
 def load_dnsmos_scores():
     """从 wav/dnsmos_scores.txt 加载 DNMOS 评分"""
@@ -293,35 +304,110 @@ def load_dnsmos_scores():
                     _dnsmos_cache[int(parts[0])] = float(parts[1])
     return _dnsmos_cache
 
+def save_scores_direct(scores):
+    """直接保存评分文件"""
+    path = os.path.join(ROOT_DIR, "wav/dnsmos_scores.txt")
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        for cid in sorted(scores.keys()):
+            f.write(f"{cid:04d}|{scores[cid]:.2f}\n")
+
+def _load_mos_model():
+    """加载 MOS 模型（惰性加载）"""
+    global _mos_predictor
+    if _mos_predictor is None:
+        import torch
+        import torchaudio
+        _mos_predictor = torch.hub.load(
+            "tarepan/SpeechMOS:v1.2.0", "utmos22_strong",
+            trust_repo=True, verbose=False)
+    return _mos_predictor
+
+def _score_wav_file(path):
+    """对单个 WAV 文件打分"""
+    import torch
+    import torchaudio
+    p = _load_mos_model()
+    waveform, sr = torchaudio.load(path)
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    if sr != 16000:
+        waveform = torchaudio.functional.resample(waveform, sr, 16000)
+    return p(waveform, sr=16000).item()
+
+def start_scoring(skip_scored=True):
+    """启动后台评分"""
+    if _score_progress["active"]:
+        return {"error": "评分正在进行中"}
+
+    generated = get_generated_status()
+    existing = load_dnsmos_scores()
+    if skip_scored:
+        to_score = sorted(generated - set(existing.keys()))
+    else:
+        to_score = sorted(generated)
+
+    if not to_score:
+        return {"message": "所有音频已有评分"}
+
+    _score_progress["active"] = True
+    _score_progress["total"] = len(to_score)
+    _score_progress["done"] = 0
+    _score_progress["error"] = ""
+
+    def _run():
+        global _dnsmos_cache
+        scores = load_dnsmos_scores()
+        for cid in to_score:
+            if not _score_progress["active"]:
+                break
+            _score_progress["current_id"] = cid
+            path = os.path.join(ROOT_DIR, OUTPUT_DIR, f"{cid:04d}.wav")
+            try:
+                score = _score_wav_file(path)
+                scores[cid] = score
+                _score_progress["current_score"] = score
+                _score_progress["done"] += 1
+                print(f"[DNMOS] {cid:04d} → {score:.2f}")
+            except Exception as e:
+                _score_progress["error"] = str(e)[:100]
+                print(f"[DNMOS] {cid:04d} 评分失败: {e}")
+            if _score_progress["done"] % 10 == 0:
+                save_scores_direct(scores)
+                _dnsmos_cache = None
+
+        save_scores_direct(scores)
+        _dnsmos_cache = None
+        _score_progress["active"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"message": f"开始评分 {len(to_score)} 条音频"}
+
+def stop_scoring():
+    """取消评分"""
+    _score_progress["active"] = False
+    return {"message": "评分已取消"}
+
 def score_single_async(cid):
     """后台线程：对单条音频进行 DNMOS 评分"""
     try:
-        result = subprocess.run(
-            ["python", "dnsmos_score.py", "--id", str(cid)],
-            capture_output=True, text=True, timeout=60
-        )
-        if result.returncode == 0:
-            # 清除缓存以便下次重新加载
-            global _dnsmos_cache
-            _dnsmos_cache = None
-            print(f"[DNMOS] 第 {cid:04d} 条评分完成")
-        else:
-            print(f"[DNMOS] 第 {cid:04d} 条评分失败: {result.stderr.strip()}")
+        path = os.path.join(ROOT_DIR, OUTPUT_DIR, f"{cid:04d}.wav")
+        if not os.path.exists(path):
+            print(f"[DNMOS] 文件不存在: {cid:04d}.wav")
+            return
+        score = _score_wav_file(path)
+        global _dnsmos_cache
+        _dnsmos_cache = None
+        save_scores_direct({cid: score, **load_dnsmos_scores()})
+        print(f"[DNMOS] 第 {cid:04d} 条评分完成 → {score:.2f}")
     except Exception as e:
         print(f"[DNMOS] 第 {cid:04d} 条评分异常: {e}")
 
 def auto_score_startup():
     """启动时后台评分所有未评分的已生成音频"""
-    generated = get_generated_status()
-    existing = load_dnsmos_scores()
-    unscored = generated - set(existing.keys())
-    if not unscored:
-        return
-    print(f"\n[DNMOS] 发现 {len(unscored)} 条未评分音频，后台启动评分...")
-    threading.Thread(target=lambda: subprocess.run(
-        ["python", "dnsmos_score.py", "--skip-scored"],
-        capture_output=True, text=True, timeout=3600
-    ), daemon=True).start()
+    result = start_scoring(skip_scored=True)
+    if "message" in result:
+        print(f"\n[DNMOS] {result['message']}")
 
 
 def switch_models():
@@ -629,6 +715,22 @@ class TTSHandler(SimpleHTTPRequestHandler):
             label = RATING_LABELS.get(rating, '无')
             print(f"\n  [评级] 第 {corpus_id:04d} 条 -> {label}")
             self._send_json({"success": True, "id": corpus_id, "rating": rating})
+
+        elif path == '/api/dnsmos/status':
+            self._send_json(dict(_score_progress))
+
+        elif path == '/api/dnsmos/start':
+            data = self._read_body()
+            skip = data.get('skip_scored', True)
+            result = start_scoring(skip_scored=skip)
+            if "error" in result:
+                self._send_json(result, 400)
+            else:
+                self._send_json(result)
+
+        elif path == '/api/dnsmos/stop':
+            result = stop_scoring()
+            self._send_json(result)
 
         else:
             self._send_json({"error": "Not found"}, 404)
